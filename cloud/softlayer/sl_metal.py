@@ -1,12 +1,99 @@
 #!/usr/bin/env python
 
+# TODO: 
+#
+# Documentation
+# TEST
+# Deal with RAID and storage groups better
+# Check for existing hostname.domain
+# Add hourly pre-packaged selections
+# Make OS and imageTemplateID mutually exclusive
+#
+
 DOCUMENTATION = '''
 ---
 module: sl_metal
 short_description: Order a bare-metal instance on SoftLayer
 description:
-  - Create a bare-metal server in SoftLayer.  This technique may be used to other SoftLayer hardware components such as storage, firewalls, and other 'packages'.  Options and values are highly dependant the choice of package that is used.
+  - Create a bare-metal server in SoftLayer.  This technique may be used to other SoftLayer hardware components such as storage, firewalls, and other 'packages'.  Options and values are highly dependant the choice of package that is used.  Because of this, there will be a set of standard options, and then for the choice of a package type there will be an additional setup of options specific to that package.
+
+standard options:
+  name:
+    required: true
+    aliases: ["hostname"]
+    description: 
+      - Name of the server to create
+  domain:
+    required: true
+    description:
+      - Domain name for the server to order
+  datacenter:
+    required: true
+    description:
+      - Datacenter that will host the server
+  hourly:
+    required: false
+    default: True
+    description:
+      - Will the server be ordered hourly, or monthly
+  os:
+    required: true
+    description:
+      - The OS that will be installed on the server
+  pkgid: 
+    required: true
+    description:
+      - The server package that will be used.
+  primaryVlan:
+    required: false
+    description:
+      - VLAN ID to use for the primary/public network
+  backendVlan:
+    required: false
+    description:
+      - VLAN ID to use for the backend/private network
+  sshKeys:
+    required: false
+    description:
+      - List of SSH keys to install on system
+  storageGroups:
+    required: false
+    description:
+      - List of arrangement of disks into RAID groups
+
+ 
+typical server options:  
 '''
+
+EXAMPLES = '''
+
+- name: Build metal instance
+  hosts: localhost
+  gather_facts: False
+  tasks:
+  - name: Build instance request
+    sl_metal:
+      name: "myserver" 
+      domain: "bestdomainevah.com" 
+      datacenter: "fra02" 
+      hourly: False 
+      os: OS_UBUNTU_14_04_LTS_TRUSTY_TAHR_64_BIT 
+      pkgid: 253 
+      ram: RAM_64_GB_DDR3_1333_REG_2 
+      pri_ip_addresses: 1_IP_ADDRESS 
+      bandwidth: BANDWIDTH_500_GB
+      monitoring: MONITORING_HOST_PING 
+      remote_management: REBOOT_KVM_OVER_IP 
+      disk0: HARD_DRIVE_1_00_TB_SATA_2 
+      notification: NOTIFICATION_EMAIL_AND_TICKET
+      port_speed: 100_MBPS_PUBLIC_PRIVATE_NETWORK_UPLINKS
+      disk_controller: DISK_CONTROLLER_NONRAID
+      vulnerability_scanner: NESSUS_VULNERABILITY_ASSESSMENT_REPORTING
+      response: AUTOMATED_NOTIFICATION
+      server: INTEL_XEON_2620_2_40
+      vpn_management: UNLIMITED_SSL_VPN_USERS_1_PPTP_VPN_USER_PER_ACCOUNT
+
+''' 
 
 # Wildcard import for compatibility
 from ansible.module_utils.basic import *
