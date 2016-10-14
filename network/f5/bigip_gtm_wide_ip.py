@@ -25,7 +25,9 @@ short_description: "Manages F5 BIG-IP GTM wide ip"
 description:
     - "Manages F5 BIG-IP GTM wide ip"
 version_added: "2.0"
-author: 'Michael Perzel'
+author:
+    - Michael Perzel (@perzizzle)
+    - Tim Rupp (@caphrim007)
 notes:
     - "Requires BIG-IP software version >= 11.4"
     - "F5 developed module 'bigsuds' required (see http://devcentral.f5.com)"
@@ -35,18 +37,6 @@ notes:
 requirements:
     - bigsuds
 options:
-    server:
-        description:
-            - BIG-IP host
-        required: true
-    user:
-        description:
-            - BIG-IP username
-        required: true
-    password:
-        description:
-            - BIG-IP password
-        required: true
     lb_method:
         description:
             - LB method of wide ip
@@ -60,13 +50,14 @@ options:
         description:
             - Wide IP name
         required: true
+extends_documentation_fragment: f5
 '''
 
 EXAMPLES = '''
   - name: Set lb method
     local_action: >
       bigip_gtm_wide_ip
-      server=192.168.0.1
+      server=192.0.2.1
       user=admin
       password=mysecret
       lb_method=round_robin
@@ -79,10 +70,6 @@ except ImportError:
     bigsuds_found = False
 else:
     bigsuds_found = True
-
-def bigip_api(server, user, password):
-    api = bigsuds.BIGIP(hostname=server, username=user, password=password)
-    return api
 
 def get_wide_ip_lb_method(api, wide_ip):
     lb_method = api.GlobalLB.WideIP.get_lb_method(wide_ips=[wide_ip])[0]
@@ -114,21 +101,21 @@ def set_wide_ip_lb_method(api, wide_ip, lb_method):
     api.GlobalLB.WideIP.set_lb_method(wide_ips=[wide_ip], lb_methods=[lb_method])
 
 def main():
+    argument_spec = f5_argument_spec()
 
     lb_method_choices = ['return_to_dns', 'null', 'round_robin',
                                     'ratio', 'topology', 'static_persist', 'global_availability',
                                     'vs_capacity', 'least_conn', 'lowest_rtt', 'lowest_hops',
                                     'packet_rate', 'cpu', 'hit_ratio', 'qos', 'bps',
                                     'drop_packet', 'explicit_ip', 'connection_rate', 'vs_score']
+    meta_args = dict(
+        lb_method = dict(type='str', required=True, choices=lb_method_choices),
+        wide_ip = dict(type='str', required=True)
+    )
+    argument_spec.update(meta_args)
 
     module = AnsibleModule(
-        argument_spec = dict(
-            server = dict(type='str', required=True),
-            user = dict(type='str', required=True),
-            password = dict(type='str', required=True),
-            lb_method = dict(type='str', required=True, choices=lb_method_choices),
-            wide_ip = dict(type='str', required=True)
-        ),
+        argument_spec=argument_spec,
         supports_check_mode=True
     )
 
@@ -136,15 +123,17 @@ def main():
         module.fail_json(msg="the python bigsuds module is required")
 
     server = module.params['server']
+    server_port = module.params['server_port']
     user = module.params['user']
     password = module.params['password']
     wide_ip = module.params['wide_ip']
     lb_method = module.params['lb_method']
+    validate_certs = module.params['validate_certs']
 
     result = {'changed': False}  # default
 
     try:
-        api = bigip_api(server, user, password)
+        api = bigip_api(server, user, password, validate_certs, port=server_port)
 
         if not wide_ip_exists(api, wide_ip):
             module.fail_json(msg="wide ip %s does not exist" % wide_ip)
@@ -163,6 +152,7 @@ def main():
 
 # import module snippets
 from ansible.module_utils.basic import *
+from ansible.module_utils.f5 import *
 
 if __name__ == '__main__':
     main()

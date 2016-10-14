@@ -32,6 +32,8 @@ DOCUMENTATION = '''
 ---
 module: cloudflare_dns
 author: "Michael Gruener (@mgruener)"
+requirements:
+   - "python >= 2.6"
 version_added: "2.1"
 short_description: manage Cloudflare DNS records
 description:
@@ -87,7 +89,7 @@ options:
     default: 30
   ttl:
     description:
-      - The TTL to give the new record. Min 1 (automatic), max 2147483647
+      - The TTL to give the new record. Must be between 120 and 2,147,483,647 seconds, or 1 for automatic.
     required: false
     default: 1 (automatic)
   type:
@@ -186,7 +188,7 @@ record:
             description: the record content (details depend on record type)
             returned: success
             type: string
-            sample: 192.168.100.20
+            sample: 192.0.2.91
         created_on:
             description: the record creation date
             returned: success
@@ -349,11 +351,17 @@ class CloudflareAPI(object):
         result = None
         try:
             content = resp.read()
-            result = json.loads(content)
         except AttributeError:
-            error_msg += "; The API response was empty"
-        except json.JSONDecodeError:
-            error_msg += "; Failed to parse API response: {0}".format(content)
+            if info['body']:
+                content = info['body']
+            else:
+                error_msg += "; The API response was empty"
+
+        if content:
+            try:
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                error_msg += "; Failed to parse API response: {0}".format(content)
 
         # received an error status but no data with details on what failed
         if  (info['status'] not in [200,304]) and (result is None):

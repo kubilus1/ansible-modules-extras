@@ -37,6 +37,15 @@ options:
       - The geo-locations in which the resource group will be located.
     required: false
     default: westus
+  deployment_mode:
+    description:
+      - In incremental mode, resources are deployed without deleting existing resources that are not included in the template. 
+        In complete mode resources are deployed and existing resources in the resource group not included in the template are deleted.
+    required: false
+    default: complete
+    choices:
+        - complete
+        - incremental
   state:
     description:
       - If state is "present", template will be created. If state is "present" and if deployment exists, it will be
@@ -70,6 +79,20 @@ options:
         one of them is required if "state" parameter is "present".
     required: false
     default: null
+  deployment_name:
+    description:
+      - The name of the deployment to be tracked in the resource group deployment history. Re-using a deployment name
+        will overwrite the previous value in the resource group's deployment history.
+    default: ansible-arm
+  wait_for_deployment_completion:
+    description:
+      - Whether or not to block until the deployment has completed.
+    default: yes
+    choices: ['yes', 'no']
+  wait_for_deployment_polling_period:
+    description:
+      - Time (in seconds) to wait between polls when waiting for deployment completion.
+    default: 10
 
 extends_documentation_fragment:
     - azure
@@ -207,7 +230,7 @@ EXAMPLES = '''
         imageOffer: "UbuntuServer"
         OSDiskName: "osdiskforlinuxsimple"
         nicName: "myVMNic"
-        addressPrefix: "10.0.0.0/16"
+        addressPrefix: "192.0.2.0/24"
         subnetName: "Subnet"
         subnetPrefix: "10.0.0.0/24"
         storageAccountType: "Standard_LRS"
@@ -362,8 +385,8 @@ try:
                                                       Deployment,
                                                       ResourceGroup,
                                                       Dependency)
-    from azure.mgmt.resource.resources import ResourceManagementClient, ResourceManagementClientConfiguration
-    from azure.mgmt.network import NetworkManagementClient, NetworkManagementClientConfiguration
+    from azure.mgmt.resource.resources import ResourceManagementClient
+    from azure.mgmt.network import NetworkManagementClient
 
 except ImportError:
     # This is handled in azure_rm_common
@@ -385,7 +408,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
             deployment_mode=dict(type='str', default='complete', choices=['complete', 'incremental']),
             deployment_name=dict(type='str', default="ansible-arm"),
             wait_for_deployment_completion=dict(type='bool', default=True),
-            wait_for_deployment_polling_period=dict(type='int', default=30)
+            wait_for_deployment_polling_period=dict(type='int', default=10)
         )
 
         mutually_exclusive = [('template', 'template_link'),
@@ -450,8 +473,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
         :return:
         """
 
-        deploy_parameter = DeploymentProperties()
-        deploy_parameter.mode = self.deployment_mode
+        deploy_parameter = DeploymentProperties(self.deployment_mode)
         if not self.parameters_link:
             deploy_parameter.parameters = self.parameters
         else:
@@ -479,7 +501,7 @@ class AzureRMDeploymentManager(AzureRMModuleBase):
 
             deployment_result = self.get_poller_result(result)
             if self.wait_for_deployment_completion:
-                while deployment_result.properties.provisioning_state not in ['Canceled', 'Failed', 'Deleted',
+                while deployment_result.properties is None or deployment_result.properties.provisioning_state not in ['Canceled', 'Failed', 'Deleted',
                                                                               'Succeeded']:
                     time.sleep(self.wait_for_deployment_polling_period)
                     deployment_result = self.rm_client.deployments.get(self.resource_group_name, self.deployment_name)

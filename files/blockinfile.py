@@ -116,7 +116,7 @@ EXAMPLES = r"""
     dest: /etc/network/interfaces
     block: |
       iface eth0 inet static
-          address 192.168.0.1
+          address 192.0.2.23
           netmask 255.255.255.0
 
 - name: insert/update HTML surrounded by custom markers after <body> line
@@ -134,11 +134,11 @@ EXAMPLES = r"""
     marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
     content: ""
 
-- name: insert/update "Match User" configuation block in /etc/ssh/sshd_config
+- name: Add mappings to /etc/hosts
   blockinfile:
     dest: /etc/hosts
     block: |
-      {{item.name}} {{item.ip}}
+      {{item.ip}} {{item.name}}
     marker: "# {mark} ANSIBLE MANAGED BLOCK {{item.name}}"
   with_items:
       - { name: host1, ip: 10.10.1.10 }
@@ -169,7 +169,7 @@ def write_changes(module, contents, dest):
             module.fail_json(msg='failed to validate: '
                                  'rc:%s error:%s' % (rc, err))
     if valid:
-        module.atomic_move(tmpfile, dest)
+        module.atomic_move(tmpfile, dest, unsafe_writes=module.params['unsafe_writes'])
 
 
 def check_file_attrs(module, changed, message):
@@ -188,7 +188,7 @@ def check_file_attrs(module, changed, message):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            dest=dict(required=True, aliases=['name', 'destfile']),
+            dest=dict(required=True, aliases=['name', 'destfile'], type='path'),
             state=dict(default='present', choices=['absent', 'present']),
             marker=dict(default='# {mark} ANSIBLE MANAGED BLOCK', type='str'),
             block=dict(default='', type='str', aliases=['content']),
@@ -204,7 +204,7 @@ def main():
     )
 
     params = module.params
-    dest = os.path.expanduser(params['dest'])
+    dest = params['dest']
     if module.boolean(params.get('follow', None)):
         dest = os.path.realpath(dest)
 
@@ -212,7 +212,8 @@ def main():
         module.fail_json(rc=256,
                          msg='Destination %s is a directory !' % dest)
 
-    if not os.path.exists(dest):
+    path_exists = os.path.exists(dest)
+    if not path_exists:
         if not module.boolean(params['create']):
             module.fail_json(rc=257,
                              msg='Destination %s does not exist !' % dest)
@@ -230,6 +231,9 @@ def main():
     marker = params['marker']
     present = params['state'] == 'present'
 
+    if not present and not path_exists:
+        module.exit_json(changed=False, msg="File not present")
+
     if insertbefore is None and insertafter is None:
         insertafter = 'EOF'
 
@@ -244,7 +248,7 @@ def main():
     marker1 = re.sub(r'{mark}', 'END', marker)
     if present and block:
         # Escape seqeuences like '\n' need to be handled in Ansible 1.x
-        if module.constants['ANSIBLE_VERSION'].startswith('1.'):
+        if module.ansible_version.startswith('1.'):
             block = re.sub('', block, '')
         blocklines = [marker0] + block.splitlines() + [marker1]
     else:
@@ -280,7 +284,9 @@ def main():
     lines[n0:n0] = blocklines
 
     if lines:
-        result = '\n'.join(lines)+'\n'
+        result = '\n'.join(lines)
+        if original and original.endswith('\n'):
+            result += '\n'
     else:
         result = ''
     if original == result:
@@ -297,9 +303,12 @@ def main():
         changed = True
 
     if changed and not module.check_mode:
-        if module.boolean(params['backup']) and os.path.exists(dest):
+        if module.boolean(params['backup']) and path_exists:
             module.backup_local(dest)
         write_changes(module, result, dest)
+
+    if module.check_mode and not path_exists:
+        module.exit_json(changed=changed, msg=msg)
 
     msg, changed = check_file_attrs(module, changed, msg)
     module.exit_json(changed=changed, msg=msg)

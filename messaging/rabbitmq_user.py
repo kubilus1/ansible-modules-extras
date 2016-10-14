@@ -139,14 +139,14 @@ class RabbitMqUser(object):
         self.bulk_permissions = bulk_permissions
 
         self._tags = None
-        self._permissions = None
+        self._permissions = []
         self._rabbitmqctl = module.get_bin_path('rabbitmqctl', True)
 
     def _exec(self, args, run_in_check_mode=False):
         if not self.module.check_mode or (self.module.check_mode and run_in_check_mode):
             cmd = [self._rabbitmqctl, '-q']
             if self.node is not None:
-                cmd.append(['-n', self.node])
+                cmd.extend(['-n', self.node])
             rc, out, err = self.module.run_command(cmd + args, check_rc=True)
             return out.splitlines()
         return list()

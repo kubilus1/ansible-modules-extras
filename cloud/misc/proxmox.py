@@ -98,7 +98,14 @@ options:
       - specifies network interfaces for the container
     default: null
     required: false
-    type: string
+    type:  A hash/dictionary defining interfaces
+  mounts:
+    description:
+      - specifies additional mounts (separate disks) for the container
+    default: null
+    required: false
+    type:  A hash/dictionary defining mount points
+    version_added: "2.2"
   ip_address:
     description:
       - specifies the address the container will be assigned
@@ -171,6 +178,15 @@ EXAMPLES = '''
 # Create new container with minimal options use environment PROXMOX_PASSWORD variable(you should export it before)
 - proxmox: vmid=100 node='uk-mc02' api_user='root@pam' api_host='node1' password='123456' hostname='example.org' ostemplate='local:vztmpl/ubuntu-14.04-x86_64.tar.gz'
 
+# Create new container with minimal options defining network interface with dhcp
+- proxmox: vmid=100 node='uk-mc02' api_user='root@pam' api_password='1q2w3e' api_host='node1' password='123456' hostname='example.org' ostemplate='local:vztmpl/ubuntu-14.04-x86_64.tar.gz' netif='{"net0":"name=eth0,ip=dhcp,ip6=dhcp,bridge=vmbr0"}'
+
+# Create new container with minimal options defining network interface with static ip
+- proxmox: vmid=100 node='uk-mc02' api_user='root@pam' api_password='1q2w3e' api_host='node1' password='123456' hostname='example.org' ostemplate='local:vztmpl/ubuntu-14.04-x86_64.tar.gz' netif='{"net0":"name=eth0,gw=192.168.0.1,ip=192.168.0.2/24,bridge=vmbr0"}'
+
+# Create new container with minimal options defining a mount
+- proxmox: vmid=100 node='uk-mc02' api_user='root@pam' api_password='1q2w3e' api_host='node1' password='123456' hostname='example.org' ostemplate='local:vztmpl/ubuntu-14.04-x86_64.tar.gz' mounts='{"mp0":"local:8,mp=/mnt/test/"}'
+
 # Start container
 - proxmox: vmid=100 api_user='root@pam' api_password='1q2w3e' api_host='node1' state=started
 
@@ -201,8 +217,8 @@ VZ_TYPE=None
 def get_instance(proxmox, vmid):
   return [ vm for vm in proxmox.cluster.resources.get(type='vm') if vm['vmid'] == int(vmid) ]
 
-def content_check(proxmox, node, ostemplate, storage):
-  return [ True for cnt in proxmox.nodes(node).storage(storage).content.get() if cnt['volid'] == ostemplate ]
+def content_check(proxmox, node, ostemplate, template_store):
+  return [ True for cnt in proxmox.nodes(node).storage(template_store).content.get() if cnt['volid'] == ostemplate ]
 
 def node_check(proxmox, node):
   return [ True for nd in proxmox.nodes.get() if nd['node'] == node ]
@@ -216,6 +232,9 @@ def create_instance(module, proxmox, vmid, node, disk, storage, cpus, memory, sw
       if 'netif' in kwargs:
         kwargs.update(kwargs['netif'])
         del kwargs['netif']
+      if 'mounts' in kwargs:
+        kwargs.update(kwargs['mounts'])
+        del kwargs['mounts']
   else:
       kwargs['cpus']=cpus
       kwargs['disk']=disk
@@ -294,7 +313,8 @@ def main():
       cpus = dict(type='int', default=1),
       memory = dict(type='int', default=512),
       swap = dict(type='int', default=0),
-      netif = dict(),
+      netif = dict(type='dict'),
+      mounts = dict(type='dict'),
       ip_address = dict(),
       onboot = dict(type='bool', default='no'),
       storage = dict(default='local'),
@@ -322,6 +342,8 @@ def main():
   memory = module.params['memory']
   swap = module.params['swap']
   storage = module.params['storage']
+  if module.params['ostemplate'] is not None:
+    template_store = module.params['ostemplate'].split(":")[0]
   timeout = module.params['timeout']
 
   # If password not set get it from PROXMOX_PASSWORD env
@@ -347,15 +369,16 @@ def main():
         module.fail_json(msg='node, hostname, password and ostemplate are mandatory for creating vm')
       elif not node_check(proxmox, node):
         module.fail_json(msg="node '%s' not exists in cluster" % node)
-      elif not content_check(proxmox, node, module.params['ostemplate'], storage):
+      elif not content_check(proxmox, node, module.params['ostemplate'], template_store):
         module.fail_json(msg="ostemplate '%s' not exists on node %s and storage %s"
-                         % (module.params['ostemplate'], node, storage))
+                         % (module.params['ostemplate'], node, template_store))
 
       create_instance(module, proxmox, vmid, node, disk, storage, cpus, memory, swap, timeout,
                       password = module.params['password'],
                       hostname = module.params['hostname'],
                       ostemplate = module.params['ostemplate'],
                       netif = module.params['netif'],
+                      mounts = module.params['mounts'],
                       ip_address = module.params['ip_address'],
                       onboot = int(module.params['onboot']),
                       cpuunits = module.params['cpuunits'],

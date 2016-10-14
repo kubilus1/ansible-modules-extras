@@ -79,6 +79,13 @@ options:
         description:
             - Whether to use an SSL connection when connecting to the database
         default: False
+    ssl_cert_reqs:
+        version_added: "2.2"
+        description:
+            - Specifies whether a certificate is required from the other side of the connection, and whether it will be validated if provided.
+        required: false
+        default: "CERT_REQUIRED"
+        choices: ["CERT_REQUIRED", "CERT_OPTIONAL", "CERT_NONE"]
     roles:
         version_added: "1.3"
         description:
@@ -144,6 +151,7 @@ EXAMPLES = '''
 
 '''
 
+import ssl as ssl_lib
 import ConfigParser
 from distutils.version import LooseVersion
 try:
@@ -165,11 +173,52 @@ else:
 # MongoDB module specific support methods.
 #
 
+def check_compatibility(module, client):
+    """Check the compatibility between the driver and the database.
+
+       See: https://docs.mongodb.com/ecosystem/drivers/driver-compatibility-reference/#python-driver-compatibility
+
+    Args:
+        module: Ansible module.
+        client (cursor): Mongodb cursor on admin database.
+    """
+    loose_srv_version = LooseVersion(client.server_info()['version'])
+    loose_driver_version = LooseVersion(PyMongoVersion)
+
+    if loose_srv_version >= LooseVersion('3.2') and loose_driver_version <= LooseVersion('3.2'):
+        module.fail_json(msg=' (Note: you must use pymongo 3.2+ with MongoDB >= 3.2)')
+
+    elif loose_srv_version >= LooseVersion('3.0') and loose_driver_version <= LooseVersion('2.8'):
+        module.fail_json(msg=' (Note: you must use pymongo 2.8+ with MongoDB 3.0)')
+
+    elif loose_srv_version >= LooseVersion('2.6') and loose_srv_version <= LooseVersion('2.7'):
+        module.fail_json(msg=' (Note: you must use pymongo 2.7+ with MongoDB 2.6)')
+
+    elif LooseVersion(PyMongoVersion) <= LooseVersion('2.5'):
+        module.fail_json(msg=' (Note: you must be on mongodb 2.4+ and pymongo 2.5+ to use the roles param)')
+
+
 def user_find(client, user, db_name):
+    """Check if the user exists.
+
+    Args:
+        client (cursor): Mongodb cursor on admin database.
+        user (str): User to check.
+        db_name (str): User's database.
+
+    Returns:
+        dict: when user exists, False otherwise.
+    """
     for mongo_user in client["admin"].system.users.find():
-        if mongo_user['user'] == user and mongo_user['db'] == db_name:
-            return mongo_user
+        if mongo_user['user'] == user:
+            # NOTE: there is no 'db' field in mongo 2.4.
+            if 'db' not in mongo_user:
+                return mongo_user
+
+            if mongo_user["db"] == db_name:
+                return mongo_user
     return False
+
 
 def user_add(module, client, db_name, user, password, roles):
     #pymongo's user_add is a _create_or_update_user so we won't know if it was changed or updated
@@ -179,13 +228,7 @@ def user_add(module, client, db_name, user, password, roles):
     if roles is None:
         db.add_user(user, password, False)
     else:
-        try:
-            db.add_user(user, password, None, roles=roles)
-        except OperationFailure, e:
-            err_msg = str(e)
-            if LooseVersion(PyMongoVersion) <= LooseVersion('2.5'):
-                err_msg = err_msg + ' (Note: you must be on mongodb 2.4+ and pymongo 2.5+ to use the roles param)'
-            module.fail_json(msg=err_msg)
+        db.add_user(user, password, None, roles=roles)
 
 def user_remove(module, client, db_name, user):
     exists = user_find(client, user, db_name)
@@ -270,6 +313,7 @@ def main():
             roles=dict(default=None, type='list'),
             state=dict(default='present', choices=['absent', 'present']),
             update_password=dict(default="always", choices=["always", "on_create"]),
+            ssl_cert_reqs=dict(default='CERT_REQUIRED', choices=['CERT_NONE', 'CERT_OPTIONAL', 'CERT_REQUIRED']),
         ),
         supports_check_mode=True
     )
@@ -288,15 +332,29 @@ def main():
     user = module.params['name']
     password = module.params['password']
     ssl = module.params['ssl']
-    roles = module.params['roles']
+    ssl_cert_reqs = None
+    roles = module.params['roles'] or []
     state = module.params['state']
     update_password = module.params['update_password']
 
     try:
+        connection_params = {
+            "host": login_host,
+            "port": int(login_port),
+        }
+
         if replica_set:
-            client = MongoClient(login_host, int(login_port), replicaset=replica_set, ssl=ssl)
-        else:
-            client = MongoClient(login_host, int(login_port), ssl=ssl)
+            connection_params["replicaset"] = replica_set
+
+        if ssl:
+            connection_params["ssl"] = ssl
+            connection_params["ssl_cert_reqs"] = getattr(ssl_lib, module.params['ssl_cert_reqs'])
+
+        client = MongoClient(**connection_params)
+
+        # NOTE: this check must be done ASAP.
+        # We doesn't need to be authenticated.
+        check_compatibility(module, client)
 
         if login_user is None and login_password is None:
             mongocnf_creds = load_mongocnf()
@@ -313,25 +371,25 @@ def main():
                 module.fail_json(msg='The localhost login exception only allows the first admin account to be created')
             #else: this has to be the first admin user added
 
-    except ConnectionFailure, e:
+    except Exception, e:
         module.fail_json(msg='unable to connect to database: %s' % str(e))
 
     if state == 'present':
         if password is None and update_password == 'always':
             module.fail_json(msg='password parameter required when adding a user unless update_password is set to on_create')
 
-        uinfo = user_find(client, user, db_name)
-        if update_password != 'always' and uinfo:
-            password = None
-            if not check_if_roles_changed(uinfo, roles, db_name):
-                module.exit_json(changed=False, user=user)
-
-        if module.check_mode:
-            module.exit_json(changed=True, user=user)
-
         try:
+            uinfo = user_find(client, user, db_name)
+            if update_password != 'always' and uinfo:
+                password = None
+                if not check_if_roles_changed(uinfo, roles, db_name):
+                    module.exit_json(changed=False, user=user)
+
+            if module.check_mode:
+                module.exit_json(changed=True, user=user)
+
             user_add(module, client, db_name, user, password, roles)
-        except OperationFailure, e:
+        except Exception, e:
             module.fail_json(msg='Unable to add or update user: %s' % str(e))
 
             # Here we can  check password change if mongo provide a query for that : https://jira.mongodb.org/browse/SERVER-22848
@@ -342,7 +400,7 @@ def main():
     elif state == 'absent':
         try:
             user_remove(module, client, db_name, user)
-        except OperationFailure, e:
+        except Exception, e:
             module.fail_json(msg='Unable to remove user: %s' % str(e))
 
     module.exit_json(changed=True, user=user)

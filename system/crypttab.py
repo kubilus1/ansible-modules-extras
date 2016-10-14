@@ -52,7 +52,7 @@ options:
     default: null
   password:
     description:
-      - Encryption password, the path to a file containing the pasword, or
+      - Encryption password, the path to a file containing the password, or
         'none' or '-' if the password should be entered at boot.
     required: false
     default: "none"
@@ -73,7 +73,7 @@ author: "Steve (@groks)"
 '''
 
 EXAMPLES = '''
-- name: Set the options explicitly a deivce which must already exist
+- name: Set the options explicitly a device which must already exist
   crypttab: name=luks-home state=present opts=discard,cipher=aes-cbc-essiv:sha256
 
 - name: Add the 'discard' option to any existing options for all devices
@@ -82,6 +82,9 @@ EXAMPLES = '''
   when: '/dev/mapper/luks-' in {{ item.device }}
 '''
 
+from ansible.module_utils.basic import *
+from ansible.module_utils.pycompat24 import get_exception
+
 def main():
 
     module = AnsibleModule(
@@ -89,9 +92,9 @@ def main():
             name           = dict(required=True),
             state          = dict(required=True, choices=['present', 'absent', 'opts_present', 'opts_absent']),
             backing_device = dict(default=None),
-            password       = dict(default=None),
+            password       = dict(default=None, type='path'),
             opts           = dict(default=None),
-            path           = dict(default='/etc/crypttab')
+            path           = dict(default='/etc/crypttab', type='path')
         ),
         supports_check_mode = True
     )
@@ -126,7 +129,8 @@ def main():
     try:
         crypttab = Crypttab(path)
         existing_line = crypttab.match(name)
-    except Exception, e:
+    except Exception:
+        e = get_exception()
         module.fail_json(msg="failed to open and parse crypttab file: %s" % e,
                          **module.params)
 
@@ -358,6 +362,4 @@ class Options(dict):
                 ret.append('%s=%s' % (k, v))
         return ','.join(ret)
 
-# import module snippets
-from ansible.module_utils.basic import *
 main()
