@@ -1,0 +1,28 @@
+---
+hosts: all
+
+- name: Build metal instance
+  hosts: localhost
+  gather_facts: False
+  tasks:
+  - name: Build instance request
+    sl_metal:
+      name: "myserver" 
+      domain: "bestdomain.com" 
+      datacenter: "fra02" 
+      hourly: False 
+      os: OS_UBUNTU_14_04_LTS_TRUSTY_TAHR_64_BIT 
+      pkgid: 253 
+      ram: RAM_64_GB_DDR3_1333_REG_2 
+      pri_ip_addresses: 1_IP_ADDRESS 
+      bandwidth: BANDWIDTH_500_GB
+      monitoring: MONITORING_HOST_PING 
+      remote_management: REBOOT_KVM_OVER_IP 
+      disk0: HARD_DRIVE_1_00_TB_SATA_2 
+      notification: NOTIFICATION_EMAIL_AND_TICKET
+      port_speed: 100_MBPS_PUBLIC_PRIVATE_NETWORK_UPLINKS
+      disk_controller: DISK_CONTROLLER_NONRAID
+      vulnerability_scanner: NESSUS_VULNERABILITY_ASSESSMENT_REPORTING
+      response: AUTOMATED_NOTIFICATION
+      server: INTEL_XEON_2620_2_40
+      vpn_management: UNLIMITED_SSL_VPN_USERS_1_PPTP_VPN_USER_PER_ACCOUNT
