@@ -603,9 +603,9 @@ class SL_data(object):
     def __init__(self, client):
 
         self.client = client
-        self.dcenters = { 
-            x.get('name'):x.get('id') for x in self.client["SoftLayer_Location_Datacenter"].getDatacenters(mask='name,id') 
-        }
+        self.dcenters = dict( 
+            (x.get('name'),x.get('id')) for x in self.client["SoftLayer_Location_Datacenter"].getDatacenters(mask='name,id') 
+        )
 
     def gen_option_docs(self, pkgid, datacenter):
         import yaml
@@ -626,7 +626,8 @@ class SL_data(object):
 
     def get_server_pkgs(self):
         hws = self.client['Product_Package'].getAllObjects(mask='id,name,keyName,type')
-        return { x.get('keyName'):x.get('id') for x in hws if 'BARE_METAL_CPU' in x.get('type').get('keyName') }   
+        return dict( (x.get('keyName'),x.get('id')) for x in hws if 'BARE_METAL_CPU' in x.get('type').get('keyName') )
+
     def get_categories(self, package_id):
         categories = self.client['Product_Package'].getConfiguration(
             id=package_id, 
@@ -683,11 +684,11 @@ class SL_data(object):
         location_items = self.get_location_items(package_id, dcenter)
 
         #std_dict = {s.get('id'):s for s in standard_items if s.get('id') not in dict1}
-        item_dict = {s.get(key):s for s in standard_items}
+        item_dict = dict( (s.get(key), s) for s in standard_items )
 
-        loc_dict = {
-            s.get(key): l for l in location_items for s in standard_items if s.get(key) == l.get(key)
-        }
+        loc_dict = dict( 
+            (s.get(key), l) for l in location_items for s in standard_items if s.get(key) == l.get(key)
+        )
 
         # Update the standard items with location specific pricing
         item_dict.update(loc_dict)
@@ -708,12 +709,12 @@ class SL_data(object):
         cats = self.get_categories(package_id)
         items = self.get_items('id', package_id, dcenter)
 
-        item_cats = { 
-            c.get('itemCategory').get('categoryCode'):[ 
+        item_cats = dict( 
+            (c.get('itemCategory').get('categoryCode'), [ 
                 i.get('keyName') for i in items.itervalues() \
                 if i.get('itemCategory').get('id') == c.get('itemCategory').get('id') 
-            ] for c in cats 
-        }
+            ]) for c in cats
+        )
 
         # Massage the disk options since the SoftLayer API is inconsistent and broken
         disk_opts = item_cats.get('disk0')
@@ -820,18 +821,18 @@ def main():
     cats = sld.get_categories(int(args.get('pkgid')))
     if state == 'present' or state == 'options':
         # Grab options unique to the chosen package id
-        package_spec = { 
-            c.get('itemCategory').get('categoryCode'): { 
+        package_spec = dict(
+            (c.get('itemCategory').get('categoryCode'), { 
                 'required': c.get('isRequired'), 'choices': item_cats.get(c.get('itemCategory').get('categoryCode')) 
-            } for c in cats if item_cats.get(c.get('itemCategory').get('categoryCode'))
-        }
+            }) for c in cats if item_cats.get(c.get('itemCategory').get('categoryCode'))
+        )
     else:
         # If not creating/verifying mark all package options as not required
-        package_spec = { 
-            c.get('itemCategory').get('categoryCode'): { 
+        package_spec = dict(
+            (c.get('itemCategory').get('categoryCode'), { 
                 'required': 0, 'choices': item_cats.get(c.get('itemCategory').get('categoryCode')) 
-            } for c in cats if item_cats.get(c.get('itemCategory').get('categoryCode'))
-        }
+            }) for c in cats if item_cats.get(c.get('itemCategory').get('categoryCode'))
+        )
 
     # Extend the arguments with the available package_specs
     arg_spec.update(package_spec)
