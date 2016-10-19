@@ -30,7 +30,7 @@ description:
   - Create a bare-metal server in SoftLayer.  This technique may be used to order other SoftLayer hardware components such as storage, firewalls, and other 'packages', this module will focus BARE_METAL_CPU (servers), however.  
   - Options and values are highly dependant on the choice of package that is used.  Because of this, there will be a set of standard options, and then for the choice of a package type there will be an additional setup of options specific to that package.
   - The following is a list of standard options and options for a typical pkgid 253 (DUAL_E52600_4_DRIVES) system.
-version_added: "0.0"
+version_added: "2.3"
 author: "Matt Kubilus, @kubilus1"
 requirements:
     - "python >= 2.7"
