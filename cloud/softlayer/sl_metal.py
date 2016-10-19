@@ -593,7 +593,6 @@ except ImportError:
     HAS_SL = False
 
 
-
 class SL_data(object):
     """ 
     SL_data
@@ -726,6 +725,9 @@ class SL_data(object):
 
 
 class Order(object):
+    """
+    Order - SoftLayer product order class
+    """
     def __init__(self, client, module):
         self.client = client
         self.module = module
@@ -752,7 +754,7 @@ class Order(object):
             setattr(self, k, module.params.get(k))
 
     def getLocationId(self, location):
-        '''Return the id of the datacenter specified by its short name.'''
+        """Return the id of the datacenter specified by its short name."""
         filt = {'name': {'operation': location}}
         locations = self.client['Location'].getDataCenters(mask='id, name', filter=filt)
         if len(locations) != 1:
@@ -760,6 +762,7 @@ class Order(object):
         return locations[0].get('id')
 
     def getProductOrder(self):
+        """Return the product order in a structure consumable by the SL API"""
         sld = SL_data(self.client)
        
         # For each item key get the price id, unless it is not specified
@@ -794,10 +797,6 @@ def main():
     args = _load_params()
 
     sld = SL_data(client)
-    # will need to get package_id and datacenter before parsing the argument_spec
-    item_cats = sld.get_item_categories(int(args.get('pkgid')), args.get('datacenter'))
-
-    cats = sld.get_categories(int(args.get('pkgid')))
     
     arg_spec       = dict(
         hostname        = dict(required=True, aliases=['name']),
@@ -813,7 +812,12 @@ def main():
         state           = dict(required=True, choices=['present','absent','reloaded', 'options'])
     )
 
+    # Determine the action we wish to take
     state = args.get('state')
+    
+    # Create required arg_spec dictionary for packageid/datacenter combination
+    item_cats = sld.get_item_categories(int(args.get('pkgid')), args.get('datacenter'))
+    cats = sld.get_categories(int(args.get('pkgid')))
     if state == 'present' or state == 'options':
         # Grab options unique to the chosen package id
         package_spec = { 
