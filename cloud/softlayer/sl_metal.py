@@ -560,7 +560,7 @@ EXAMPLES = '''
       datacenter: "fra02" 
       hourly: False 
       os: OS_UBUNTU_14_04_LTS_TRUSTY_TAHR_64_BIT 
-      pkgid: DUAL_E52600_4_DRIVES
+      pkgid: 253
       state: present
       # Package specific options
       ram: RAM_64_GB_DDR3_1333_REG_2 
