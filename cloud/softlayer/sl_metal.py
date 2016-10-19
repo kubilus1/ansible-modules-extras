@@ -611,16 +611,16 @@ class SL_data(object):
         import yaml
         cats = self.get_categories(pkgid)
         item_cats = self.get_item_categories(pkgid, datacenter)
-        doc = {'options':{ 
-            c.get('itemCategory').get('categoryCode'):{
+        doc = {'options': dict( 
+            (c.get('itemCategory').get('categoryCode'), {
                 'description':[
                     c.get('itemCategory').get('name'), 
                     "Package option for pkgid %s at %s" % (pkgid, datacenter) 
                 ],
                 'required':c.get('isRequired'),
                 'choices':item_cats.get(c.get('itemCategory').get('categoryCode')) 
-            } for c in cats 
-        }}
+            }) for c in cats 
+        )}
         doc_json = json.dumps(doc)
         return yaml.dump(yaml.load(doc_json), default_flow_style=False)
 
