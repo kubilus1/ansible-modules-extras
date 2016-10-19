@@ -1,11 +1,23 @@
 #!/usr/bin/env python
-
-# TODO: 
+# This file is part of Ansible
 #
-# Documentation
-# TEST
+# Ansible is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ansible is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+
+
+# Improvement Items: 
+#
 # Deal with RAID and storage groups better
-# Check for existing hostname.domain
 # Add hourly pre-packaged selections
 # Make OS and imageTemplateID mutually exclusive
 #
@@ -20,6 +32,10 @@ description:
   - The following is a list of standard options and options for a typical pkgid 253 (DUAL_E52600_4_DRIVES) system.
 version_added: "0.0"
 author: "Matt Kubilus, @kubilus1"
+requirements:
+    - "python >= 2.7"
+    - "softlayer >= 5.2"
+    - "pyyaml >= 3.12"
 notes:
   - Using this module may incur charges to your SoftLayer account.  Use at your own risk.
   - It is highly recommended to first run this in check mode with verbose logging to double-check the product order.
