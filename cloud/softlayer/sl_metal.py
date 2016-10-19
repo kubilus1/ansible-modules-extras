@@ -19,7 +19,7 @@ description:
   - Options and values are highly dependant on the choice of package that is used.  Because of this, there will be a set of standard options, and then for the choice of a package type there will be an additional setup of options specific to that package.
   - The following is a list of standard options and options for a typical pkgid 253 (DUAL_E52600_4_DRIVES) system.
 version_added: "0.0"
-author: Matt Kubilus, @kubilus1
+author: "Matt Kubilus, @kubilus1"
 notes:
   - Using this module may incur charges to your SoftLayer account.  Use at your own risk.
   - It is highly recommended to first run this in check mode with verbose logging to double-check the product order.
@@ -77,13 +77,12 @@ options:
     required: true
     description:
       - Requested state for the server
-      - present: Check or order system
-      - absent: Cancel system if it exists
-      - reloaded: Reload the OS on the system
-      - options: Return package specific options in verbose mode
+      - present - Check or order system
+      - absent - Cancel system if it exists
+      - reloaded - Reload the OS on the system
+      - options - Return package specific options in verbose mode
       - Standard option
     choices: [ present, absent, reloaded, options ]
-
   av_spyware_protection:
     choices:
     - MCAFEE_VIRUSSCAN_ANTIVIRUS_WINDOWS
