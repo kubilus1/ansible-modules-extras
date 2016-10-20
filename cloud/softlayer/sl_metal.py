@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 # This file is part of Ansible
 #
 # Ansible is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@
 # Deal with RAID and storage groups better
 # Add hourly pre-packaged selections
 # Make OS and imageTemplateID mutually exclusive
+# Perhaps include option to return system state
+# Edit editable options on existing systems
 #
 
 DOCUMENTATION = '''
@@ -580,10 +582,12 @@ EXAMPLES = '''
 
 ''' 
 
+# TODO: Disabled RETURN as it is breaking the build for docs. Needs to be fixed.
+RETURN = '''# '''
+
 from ansible.module_utils.basic import AnsibleModule, _load_params
 
 import re
-import sys
 import json
 
 try:
@@ -792,13 +796,22 @@ class Order(object):
 
 def main():
     client = SoftLayer.create_client_from_env()
+    sld = SL_data(client)
   
     # We need to pre-parse the arguments to get pkgid and datacenter
     # Since available options are dependant on this
-    args = _load_params()
-
-    sld = SL_data(client)
     
+    pre_mod = AnsibleModule(
+        argument_spec=dict(
+            pkgid           = dict(required=True, type='int'),
+            datacenter      = dict(required=True, choices=sld.dcenters.keys()),
+            state           = dict(required=True, choices=['present','absent','reloaded', 'options'])
+        ),
+        bypass_checks = True,
+        check_invalid_arguments = False,
+        supports_check_mode=True
+    )
+
     arg_spec       = dict(
         hostname        = dict(required=True, aliases=['name']),
         domain          = dict(required=True),
@@ -814,11 +827,11 @@ def main():
     )
 
     # Determine the action we wish to take
-    state = args.get('state')
+    state = pre_mod.params.get('state')
     
     # Create required arg_spec dictionary for packageid/datacenter combination
-    item_cats = sld.get_item_categories(int(args.get('pkgid')), args.get('datacenter'))
-    cats = sld.get_categories(int(args.get('pkgid')))
+    item_cats = sld.get_item_categories(pre_mod.params.get('pkgid'), pre_mod.params.get('datacenter'))
+    cats = sld.get_categories(pre_mod.params.get('pkgid'))
     if state == 'present' or state == 'options':
         # Grab options unique to the chosen package id
         package_spec = dict(
@@ -839,8 +852,7 @@ def main():
 
     if state == 'options':
         # If we are only checking the options, immediately exit
-        sys.stdout.write(json.dumps(arg_spec))
-        sys.exit(0)
+        pre_mod.exit_json(changed=False, options=arg_spec)
 
     module = AnsibleModule(
         argument_spec = arg_spec,
@@ -870,14 +882,13 @@ def main():
             o = client['Product_Order'].placeOrder(order.getProductOrder(), False)
         module.exit_json(changed=True, order=o)
 
-    elif state == "absent":
+    elif state == "absent" and not module.check_mode:
         if hws:
-            #mgr.cancel_hardware(hws[0].get('id'))
             module.exit_json(changed=True, instance=json.loads(hws0))
         else:
             module.exit_json(changed=False)
 
-    elif state == "reloaded":
+    elif state == "reloaded" and not module.check_mode:
         if hws:
             mgr.reload(hws[0].get('id'), ssh_keys=module.params.get('sshKeys'))
             module.exit_json(changed=True)
@@ -888,6 +899,8 @@ def main():
                 module.params.get('datacenter')
             ))
 
+    module.exit_json(changed=False)
+
+
 if __name__ == "__main__":
     main()
-
