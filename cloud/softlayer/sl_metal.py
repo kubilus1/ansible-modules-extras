@@ -795,8 +795,23 @@ class Order(object):
 
 
 def main():
-    client = SoftLayer.create_client_from_env()
-    sld = SL_data(client)
+    # Create a dummy AnsibleModule instance for the sole purpose of returning fail_json
+    pre_pre_mod = AnsibleModule(
+        argument_spec={},
+        bypass_checks=True,
+        supports_check_mode=True,
+        check_invalid_arguments=False
+    )
+
+    if not HAS_SL:
+      pre_pre_mod.fail_json(msg='softlayer python library required for this module')
+
+    try:
+        client = SoftLayer.create_client_from_env()
+        sld = SL_data(client)
+    except SoftLayer.exceptions.SoftLayerAPIError, e:
+        # First use of the SoftLayer client should expose authenticaion and other connection issues
+        pre_pre_mod.fail_json(msg=str(e))
   
     # We need to pre-parse the arguments to get pkgid and datacenter
     # Since available options are dependant on this
