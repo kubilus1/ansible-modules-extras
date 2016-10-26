@@ -899,7 +899,10 @@ def main():
 
     elif state == "absent" and not module.check_mode:
         if hws:
-            module.exit_json(changed=True, instance=json.loads(hws0))
+            # Cancel one at a time in the case of duplicates.
+            hwid0 = hws[0].get('id')
+            o = mgr.cancel_hardware(hardware_id=hwid0)
+            module.exit_json(changed=True, instance=hws[0], order=o)
         else:
             module.exit_json(changed=False)
 
